@@ -1,0 +1,18 @@
+# Training / experimentation stack
+ultralytics>=8.4          # YOLO26 (AGPL-3.0); also installs torch, torchvision and opencv
+numpy
+pandas
+scipy
+scikit-learn
+pillow
+pyyaml
+matplotlib
+mlflow>=2.10
+dvc>=3.40
+onnx
+onnxruntime
+# Serving (the slim Docker image uses requirements-serve.txt instead)
+fastapi
+uvicorn[standard]
+python-multipart
+gradio>=4.0

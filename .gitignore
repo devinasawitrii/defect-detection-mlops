@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# experiment tracking / runtime
+mlflow.db
+mlruns/
+logs/*.jsonl
+
+# data & checkpoints are managed by DVC (see dvc.yaml)
+/data/raw
+/data/processed
+/models/best.pt
+/runs
+/sweeps

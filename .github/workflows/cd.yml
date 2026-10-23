@@ -1,0 +1,54 @@
+name: CD
+
+# Runs when you tag a release (git tag v1.0.0 && git push --tags) or manually.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check model artifact exists
+        run: test -f models/model.onnx && test -f models/classes.json
+
+      - name: Build API image
+        run: docker build -t defect-api:ci .
+
+      - name: Smoke test the container
+        run: |
+          docker run -d --name api -p 8000:8000 defect-api:ci
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:8000/health && break || sleep 2
+          done
+          curl -sf http://localhost:8000/health
+          IMG=$(ls examples/* 2>/dev/null | head -n 1 || true)
+          if [ -n "$IMG" ]; then
+            curl -sf -F "file=@${IMG}" http://localhost:8000/predict
+          fi
+          docker rm -f api
+
+      - name: Push image to GitHub Container Registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}/defect-api
+          docker tag defect-api:ci "$IMAGE:${{ github.ref_name }}"
+          docker tag defect-api:ci "$IMAGE:latest"
+          docker push "$IMAGE:${{ github.ref_name }}"
+          docker push "$IMAGE:latest"
+
+      - name: Deploy Gradio demo to Hugging Face Space
+        if: ${{ vars.HF_SPACE_ID != '' }}
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_ID: ${{ vars.HF_SPACE_ID }}
+        run: |
+          pip install huggingface_hub
+          python scripts/deploy_hf.py

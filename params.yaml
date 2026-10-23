@@ -1,0 +1,52 @@
+data:
+  raw_dir: data/raw              # NEU-DET: images + Pascal VOC .xml annotations
+  processed_dir: data/processed  # YOLO format, written by src.prepare_data
+  val_size: 0.15
+  test_size: 0.15
+  seed: 42
+
+train:
+  model: yolo26n.pt             # COCO-pretrained weights (transfer learning). yolo26s.pt for a bigger model
+  imgsz: 640                    # NEU images are 200x200; upscaling helps small defects. Try 960 for fine textures
+  epochs: 150                   # long schedule; early stopping (patience) ends it sooner if val stops improving
+  batch: 16
+  patience: 40
+  lr0: 0.001
+  optimizer: AdamW
+  workers: 2
+  amp: true
+  seed: 42
+  # Any extra Ultralytics train argument goes here (see docs.ultralytics.com/usage/cfg).
+  extra:
+    cos_lr: true                # cosine learning-rate decay: steadier convergence on a small dataset
+    flipud: 0.5                 # defects have no "up": vertical flips are free extra data (default is 0)
+    close_mosaic: 20            # last 20 epochs without mosaic so the model sees realistic, un-mixed images
+    cache: ram                  # 1,800 tiny images fit in RAM: much faster epochs
+
+eval:
+  conf: 0.001                   # low threshold is standard for mAP computation
+  iou: 0.6
+
+serve:
+  conf: 0.25                    # default confidence threshold for the API / demo
+  iou: 0.5
+
+# Variants for `python -m src.sweep` (each overrides keys of `train`). The winner is picked on the VALIDATION
+# split. Typical cost on a free T4: roughly 20-45 min per variant.
+sweep:
+  - name: n_640                 # the recipe above, nano model
+  - name: s_640
+    model: yolo26s.pt
+  - name: n_960
+    imgsz: 960
+
+mlflow:
+  tracking_uri: sqlite:///mlflow.db
+  experiment: neu-det-yolo
+
+paths:
+  models_dir: models
+  metrics_dir: metrics
+  reports_dir: reports
+  runs_dir: runs
+  sweeps_dir: sweeps
