@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install CPU PyTorch (keeps the runner small)
+        run: pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Unit + integration tests (synthetic data, trains a tiny YOLO26, no downloads)
+        run: pytest -q
+        env:
+          YOLO_OFFLINE: "1"
+
+      - name: Model quality gate (if metrics are committed)
+        run: |
+          if [ -f metrics/eval.json ]; then
+            python -m src.check_gate --metrics metrics/eval.json --min-map50 0.65
+          else
+            echo "No metrics/eval.json yet, skipping gate."
+          fi

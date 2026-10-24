@@ -1,0 +1,76 @@
+data:
+  raw_dir: data/raw              # NEU-DET: images + Pascal VOC .xml annotations
+  processed_dir: data/processed  # YOLO format, written by src.prepare_data
+  val_size: 0.15
+  test_size: 0.15
+  seed: 42
+
+train:
+  model: yolo26n.pt             # COCO-pretrained weights (transfer learning). yolo26s.pt for a bigger model
+  imgsz: 640                    # NEU images are 200x200; upscaling helps small defects. Try 960 for fine textures
+  epochs: 150                   # long schedule; early stopping (patience) ends it sooner if val stops improving
+  batch: 16
+  patience: 40
+  lr0: 0.001
+  optimizer: AdamW
+  workers: 2
+  amp: true
+  seed: 42
+  # Any extra Ultralytics train argument goes here (see docs.ultralytics.com/usage/cfg).
+  extra:
+    cos_lr: true                # cosine learning-rate decay: steadier convergence on a small dataset
+    flipud: 0.5                 # defects have no "up": vertical flips are free extra data (default is 0)
+    close_mosaic: 20            # last 20 epochs without mosaic so the model sees realistic, un-mixed images
+    cache: ram                  # 1,800 tiny images fit in RAM: much faster epochs
+
+eval:
+  conf: 0.001                   # low threshold is standard for mAP computation
+  iou: 0.6
+
+serve:
+  conf: 0.25                    # default confidence threshold for the API / demo
+  iou: 0.5
+
+# Variants for `python -m src.sweep` (each overrides keys of `train`). The winner is picked on the VALIDATION
+# split, never on test. Cost per image relative to n_640 (from the real configs): n_960 ~2.2x, n_1280 ~4x,
+# s_960 ~8x, l_960 ~34x. Time scales with that ratio: multiply your own n_640 epoch time by it.
+# Run in this order, cheapest first, and stop when validation stops improving:
+#   python -m src.sweep --only n_640 n_640_seed2 n_640_scale n_960 --promote
+# Evidence vs. hypothesis (be honest in your README about which is which):
+#   - n_640_seed2: not an improvement, a NOISE METER. Same recipe, other seed. The gap to n_640 is how much
+#     a "better" variant must beat before you may believe it.
+#   - n_960 / n_1280: a published NEU-DET result upsampled to 1280; resolution may help small defects.
+#   - n_640_scale: HYPOTHESIS. All NEU images share one camera scale, so the default random zoom (scale=0.5)
+#     may blur exactly the fine texture that separates crazing from other classes.
+#   - s_960 / l_960: bigger models; published YOLOv8 results show little gain from size on this dataset.
+sweep:
+  - name: n_640                 # the recipe above, nano model
+  - name: n_640_seed2
+    seed: 2
+  - name: n_640_scale
+    extra:
+      scale: 0.2
+  - name: n_960
+    imgsz: 960
+  - name: n_1280
+    imgsz: 1280
+  - name: s_960
+    model: yolo26s.pt
+    imgsz: 960
+  - name: l_960                 # heavy: large model at high resolution, likely a multi-hour run
+    model: yolo26l.pt
+    imgsz: 960
+    batch: -1                   # auto-batch: picks the largest batch that fits GPU memory (avoids OOM guesswork)
+    epochs: 80
+    patience: 25
+
+mlflow:
+  tracking_uri: sqlite:///mlflow.db
+  experiment: neu-det-yolo
+
+paths:
+  models_dir: models
+  metrics_dir: metrics
+  reports_dir: reports
+  runs_dir: runs
+  sweeps_dir: sweeps

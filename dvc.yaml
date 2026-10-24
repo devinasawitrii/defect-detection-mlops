@@ -1,0 +1,85 @@
+# Reproducible pipeline:  dvc repro
+# Small deployment artifacts use `cache: false` so they stay in Git
+# (CI/CD needs models/model.onnx without a DVC remote).
+stages:
+  prepare:
+    cmd: python -m src.prepare_data
+    deps:
+      - src/prepare_data.py
+      - data/raw
+    params:
+      - data
+    outs:
+      - data/processed
+
+  train:
+    cmd: python -m src.train
+    deps:
+      - src/train.py
+      - data/processed
+    params:
+      - train
+    outs:
+      - models/best.pt
+    metrics:
+      - metrics/train.json:
+          cache: false
+
+  evaluate:
+    cmd: python -m src.evaluate
+    deps:
+      - src/evaluate.py
+      - models/best.pt
+      - data/processed/images/test
+      - data/processed/labels/test
+    params:
+      - eval
+      - train.imgsz
+    metrics:
+      - metrics/eval.json:
+          cache: false
+    outs:
+      - reports/detection_report.txt:
+          cache: false
+
+  export:
+    cmd: python -m src.export_onnx
+    deps:
+      - src/export_onnx.py
+      - serving/inference.py
+      - models/best.pt
+      - metrics/eval.json
+      - data/processed/images/test
+      - data/processed/labels/test
+    params:
+      - train.imgsz
+      - serve.conf
+      - eval
+    metrics:
+      - metrics/export.json:
+          cache: false
+    outs:
+      - models/model.onnx:
+          cache: false
+      - models/classes.json:
+          cache: false
+
+  visualize:
+    cmd: python -m src.visualize
+    deps:
+      - src/visualize.py
+      - models/model.onnx
+      - data/processed/images/test
+    outs:
+      - reports/predictions_grid.png:
+          cache: false
+
+  reference:
+    cmd: python -m src.make_reference
+    deps:
+      - src/make_reference.py
+      - models/model.onnx
+      - data/processed/images/val
+    outs:
+      - reports/reference_stats.json:
+          cache: false

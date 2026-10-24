@@ -1,0 +1,8 @@
+# Slim runtime for the API container: no PyTorch needed, the model runs on ONNX Runtime.
+numpy
+pillow
+opencv-python-headless
+onnxruntime
+fastapi
+uvicorn[standard]
+python-multipart

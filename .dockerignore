@@ -1,0 +1,13 @@
+data/
+mlruns/
+mlflow.db
+logs/
+reports/
+notebooks/
+tests/
+.git/
+.dvc/
+models/best.pt
+__pycache__/
+*.pyc
+sweeps/
